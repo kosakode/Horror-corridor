@@ -1,0 +1,1112 @@
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Horror Corridor - Python & Generators</title>
+    
+    <!-- Интерпретатор Python (Brython) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/brython/3.12.0/brython_stdlib.min.js"></script>
+
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; user-select: none; touch-action: none; color: white; }
+
+        /* --- UI СЛОИ --- */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; display: none; }
+        
+        #main-menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, #1a0505 0%, #000000 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 40; pointer-events: auto; text-align: center; }
+        #main-menu h1 { color: #fff; font-size: 50px; text-transform: uppercase; letter-spacing: 5px; text-shadow: 0 0 20px #ff0000, 0 0 40px #8b0000; margin-bottom: 10px; }
+        
+        .menu-btn { padding: 15px 40px; font-size: 24px; background: #8b0000; color: white; border: 2px solid #ff3333; border-radius: 5px; cursor: pointer; font-family: 'Courier New', Courier, monospace; font-weight: bold; transition: all 0.2s; margin: 10px; width: 320px; text-shadow: 1px 1px 2px #000; box-shadow: 0 0 10px #550000; }
+        .menu-btn:hover { background: #ff0000; box-shadow: 0 0 25px #ff0000; transform: scale(1.05); }
+        .btn-python { background: #00558b; border-color: #33aaff; box-shadow: 0 0 10px #00558b; }
+        .btn-python:hover { background: #0088ff; box-shadow: 0 0 25px #0088ff; }
+
+        #controls-screen { display: none; max-width: 650px; background: rgba(0,0,0,0.85); padding: 20px; border: 1px solid #ff3333; border-radius: 10px; text-align: left; line-height: 1.5; margin-bottom: 20px; box-shadow: 0 0 20px rgba(255,0,0,0.2); }
+        #controls-screen h2 { color: #ffaa00; text-align: center; margin-top: 0; }
+        .hint-highlight { color: #55ff55; font-weight: bold; }
+
+        /* Python Modal */
+        #python-modal { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; max-width: 700px; background: #1e1e1e; border: 2px solid #33aaff; border-radius: 10px; padding: 20px; z-index: 50; box-shadow: 0 0 30px rgba(0, 170, 255, 0.4); pointer-events: auto; }
+        #python-modal h2 { color: #33aaff; margin-top: 0; text-align: center; }
+        #python-code { width: 100%; height: 250px; background: #0a0a0a; color: #0f0; font-family: monospace; font-size: 16px; padding: 15px; border: 1px solid #555; box-sizing: border-box; resize: vertical; border-radius: 5px; }
+        .modal-buttons { display: flex; justify-content: space-between; margin-top: 15px; }
+        .modal-btn { padding: 10px 20px; cursor: pointer; font-family: monospace; font-weight: bold; font-size: 18px; border-radius: 5px; border: none; }
+        .btn-apply { background: #33aaff; color: black; transition: 0.2s; }
+        .btn-apply:hover { background: #55bbff; box-shadow: 0 0 10px #33aaff; }
+        .btn-close { background: #555; color: white; transition: 0.2s; }
+        .btn-close:hover { background: #777; }
+
+        #top-hud { padding: 15px; display: flex; justify-content: space-between; align-items: flex-start; transition: opacity 0.5s; }
+        
+        #objective-container { width: 40%; max-width: 250px; background: rgba(10, 10, 10, 0.8); border: 2px solid #444; padding: 10px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        #objective-text { font-size: 18px; color: #55ff55; font-weight: bold; }
+        #objective-status { font-size: 12px; margin-top: 5px; color: #aaa; line-height: 1.3; }
+        
+        #right-hud { display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+        .hud-box { background: rgba(10, 10, 10, 0.8); border: 2px solid #444; padding: 10px; border-radius: 5px; text-align: right; min-width: 150px; box-shadow: 0 0 15px rgba(0,0,0,0.8); }
+        
+        #battery-bar-bg { width: 100%; height: 10px; background: #111; border-radius: 5px; overflow: hidden; margin-top: 5px; box-shadow: inset 0 0 5px #000; }
+        #battery-bar { width: 100%; height: 100%; background: #ffffaa; box-shadow: 0 0 10px #ffff00; transition: width 0.1s; }
+
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: rgba(255, 255, 255, 0.6); transform: translate(-50%, -50%); border-radius: 50%; box-shadow: 0 0 4px #fff; transition: all 0.2s; }
+        .crosshair-active { background: #55ff55 !important; transform: translate(-50%, -50%) scale(2) !important; box-shadow: 0 0 10px #55ff55 !important; }
+
+        #action-text { position: absolute; top: 60%; left: 50%; transform: translateX(-50%); color: #fff; font-size: 24px; font-weight: bold; text-shadow: 2px 2px 5px #000; opacity: 0; transition: opacity 0.2s; text-align: center; width: 100%; z-index: 15; pointer-events: none; }
+        #subtitles { position: absolute; bottom: 15%; left: 50%; transform: translateX(-50%); color: #fff; font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000; background: rgba(0, 0, 0, 0.8); padding: 10px 20px; border-radius: 10px; opacity: 0; transition: opacity 0.3s; text-align: center; border: 2px solid transparent; z-index: 15; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        #center-msg { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); color: #ff0000; font-size: 30px; font-weight: bold; text-shadow: 0 0 20px #ff0000; opacity: 0; transition: opacity 0.3s; text-align: center; text-transform: uppercase; z-index: 15; pointer-events: none; width: 100%; }
+
+        #end-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #050505; z-index: 50; display: none; flex-direction: column; align-items: center; justify-content: center; color: white; text-align: center; padding: 20px; box-sizing: border-box; }
+        #end-screen h1 { color: #55ff55; font-size: 50px; margin-bottom: 20px; text-shadow: 0 0 30px #55ff55; }
+
+        #mobile-controls { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
+        @media (pointer: coarse) { #mobile-controls { display: block; } }
+
+        #look-area { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: auto; }
+        #joystick-base { position: absolute; bottom: 30px; left: 30px; width: 130px; height: 130px; background: rgba(255, 255, 255, 0.05); border: 2px solid rgba(255, 255, 255, 0.2); border-radius: 50%; pointer-events: auto; backdrop-filter: blur(2px); }
+        #joystick-stick { position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; background: rgba(255, 255, 255, 0.5); border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        
+        #action-buttons { position: absolute; bottom: 30px; right: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; pointer-events: auto; }
+        .action-btn { width: 65px; height: 65px; background: rgba(10, 10, 10, 0.7); border: 2px solid rgba(255, 255, 255, 0.3); border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 26px; color: white; user-select: none; backdrop-filter: blur(2px); transition: transform 0.1s; }
+        .action-btn:active, .action-btn.active { background: rgba(255, 255, 255, 0.3); transform: scale(0.9); }
+        
+        #btn-reload { border-color: #55ff55; color: #55ff55; opacity: 0.5; }
+        #btn-interact { border-color: #33aaff; background: rgba(51, 170, 255, 0.3); opacity: 0.5; transition: opacity 0.2s;}
+    </style>
+</head>
+<body onload="brython()">
+
+    <div id="main-menu">
+        <h1>Horror Corridor<br><span style="font-size:24px; color:#55ff55; text-shadow: 0 0 10px #00ff00;">GENERATOR EDITION</span></h1>
+        
+        <div id="controls-screen">
+            <h2>Управление и Правила</h2>
+            <p><span class="hint-highlight">WASD / Джойстик</span> - Ходить | <span class="hint-highlight">Shift / 🏃</span> - Бежать</p>
+            <p><span class="hint-highlight">Мышь / Свайп</span> - Осматриваться</p>
+            <p><span class="hint-highlight">F / 🔦</span> - Вкл/Выкл фонарик</p>
+            <p><span class="hint-highlight">R / 🔋</span> - Перезарядить фонарь (-1 батарейка)</p>
+            <p><span class="hint-highlight">E / ⚙️</span> - Включить щиток на стене (-2 батарейки)</p>
+            <hr style="border-color: #550000;">
+            <p><strong>Цель:</strong> Ищите батарейки на полу. Вставьте их в электрощитки, висящие на стенах. Вам нужно, чтобы <strong>одновременно работало 3 щитка</strong> для открытия выхода. <br><br><span style="color:red">Внимание:</span> Свет со временем начинает бесить Монстра-троллфейса. Если щиток горит слишком долго, он пойдет его ломать!</p>
+        </div>
+
+        <button class="menu-btn" id="btn-start">ИГРАТЬ</button>
+        <button class="menu-btn" id="btn-controls">ПРАВИЛА</button>
+        <button class="menu-btn btn-python" id="btn-open-python">PYTHON АДДОНЫ</button>
+    </div>
+
+    <!-- Редактор Python -->
+    <div id="python-modal">
+        <h2>Редактор Python Аддонов</h2>
+        <textarea id="python-code" spellcheck="false">
+from browser import window
+
+# API игры доступно через window.GameAPI
+api = window.GameAPI
+
+# Раскомментируйте код ниже, чтобы использовать читы!
+# api.addBatteries(100)       # Выдать себе 100 батареек
+# api.setMonsterSpeed(0.5)    # Замедлить монстра (стандарт 5.0)
+# api.setPlayerSpeed(2.0)     # Ускорить игрока в 2 раза
+# api.openExit()              # Мгновенно открыть выход
+
+def on_start():
+    api.log("Python аддон успешно загружен и готов к работе!")
+
+on_start()
+        </textarea>
+        <div class="modal-buttons">
+            <button class="modal-btn btn-close" id="btn-close-python">Отмена</button>
+            <button class="modal-btn btn-apply" id="btn-apply-python">Применить Скрипт</button>
+        </div>
+    </div>
+
+    <!-- HUD Игры -->
+    <div id="ui-layer">
+        <div id="top-hud">
+            <div id="objective-container">
+                <div id="objective-text">Запущено щитков: <span id="active-panels-count">0</span>/3</div>
+                <div id="objective-status">Найдите батарейки на полу и чините настенные щитки.</div>
+            </div>
+            
+            <div id="right-hud">
+                <div class="hud-box">
+                    <div style="font-size: 14px;">Фонарик</div>
+                    <div id="battery-bar-bg"><div id="battery-bar"></div></div>
+                    <div style="font-size: 14px; margin-top:8px; color:#55ff55; font-weight:bold;">🔋 Батарейки: <span id="inventory-bat">0</span></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="action-text">Нажмите E для взаимодействия</div>
+        <div id="subtitles"></div>
+        <div id="center-msg"></div>
+        <div id="crosshair"></div>
+    </div>
+
+    <!-- Мобильное управление -->
+    <div id="mobile-controls">
+        <div id="look-area"></div>
+        <div id="joystick-base"><div id="joystick-stick"></div></div>
+        <div id="action-buttons">
+            <div class="action-btn" id="btn-flash">🔦</div>
+            <div class="action-btn" id="btn-reload">🔋</div>
+            <div class="action-btn" id="btn-interact" style="opacity: 0.5;">⚙️</div>
+            <div class="action-btn" id="btn-run">🏃</div>
+        </div>
+    </div>
+
+    <!-- Концовка -->
+    <div id="end-screen">
+        <h1>ВЫЖИВАНИЕ УДАЛОСЬ!</h1>
+        <p>Вы успешно запитали систему 3-мя генераторами и сбежали из этого проклятого лабиринта.</p>
+        <button class="menu-btn" onclick="location.reload()" style="margin-top: 40px;">В ГЛАВНОЕ МЕНЮ</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И API ---
+        let scene, camera, renderer, raycaster;
+        let prevTime = performance.now();
+        let gameTime = 0;
+        let isGameActive = false;
+        
+        let keys = { w: false, a: false, s: false, d: false, shift: false };
+        let joyVector = { x: 0, y: 0 };
+        let baseSpeedMultiplier = 1.0;
+        
+        // Инвентарь
+        let inventoryBatteries = 0;
+        let worldBatteries = [];
+        let batterySpawnTimer = 0;
+        
+        // Освещение
+        let flashlightGroup, spotLight, playerGlowLight;
+        let isFlashlightOn = false;
+        let battery = 7.0; 
+        let isReloading = false;
+
+        // Настенные щитки
+        let panels = [];
+        let targetPanel = null;
+        
+        // Монстр
+        let monster = {
+            group: null, head: null, legL: null, legR: null,
+            active: false, gridX: 1, gridZ: 1,
+            path: [], state: 'roaming',
+            baseSpeed: 5.0, currentSpeed: 5.0,
+            pauseTimer: 0, legTime: 0, targetPanel: null
+        };
+        const MONSTER_SPAWN_TIME = 15;
+
+        // Карта (4 - это Электрощиток, висящий на стене)
+        const BLOCK_SIZE = 5;
+        const WALL_HEIGHT = 5;
+        const map = [
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,1,0,0,0,0,4,0,0,0,2,1],
+            [1,0,1,4,1,0,1,1,1,1,1,0,1,1,1],
+            [1,0,1,0,0,0,0,0,0,1,0,0,1,0,1],
+            [1,4,1,1,1,1,1,1,0,1,0,1,1,0,1],
+            [1,0,0,0,0,0,0,1,0,0,4,0,0,0,1],
+            [1,1,1,1,1,1,0,1,1,1,1,1,1,0,1],
+            [1,0,0,4,0,0,0,0,0,0,0,0,4,0,1],
+            [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1],
+            [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+            [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+        ];
+        let instancedWalls;
+        let exitMesh = null, exitLight = null;
+        let exitOpened = false;
+
+        const uiLayer = document.getElementById('ui-layer');
+        const centerMsg = document.getElementById('center-msg');
+        const subtitles = document.getElementById('subtitles');
+        const actionText = document.getElementById('action-text');
+        const btnInteractUI = document.getElementById('btn-interact');
+
+        // --- PUBLIC API ДЛЯ PYTHON ---
+        window.GameAPI = {
+            addBatteries: function(amount) {
+                inventoryBatteries += amount;
+                document.getElementById('inventory-bat').innerText = inventoryBatteries;
+                this.log(`Добавлено ${amount} батареек.`);
+            },
+            setMonsterSpeed: function(speed) {
+                monster.baseSpeed = speed;
+                monster.currentSpeed = speed;
+                this.log(`Скорость монстра: ${speed}.`);
+            },
+            setPlayerSpeed: function(speed) {
+                baseSpeedMultiplier = speed;
+                this.log(`Множитель скорости игрока: ${speed}.`);
+            },
+            openExit: function() {
+                openExit();
+                this.log("Выход открыт читом!");
+            },
+            log: function(msg) {
+                console.log("[Python Addon] " + msg);
+            }
+        };
+
+        init();
+        animate();
+
+        // --- ИНИЦИАЛИЗАЦИЯ ---
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x010101);
+            scene.fog = new THREE.FogExp2(0x010101, 0.15); 
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(1 * BLOCK_SIZE, WALL_HEIGHT / 2, 1 * BLOCK_SIZE); 
+            
+            renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" }); 
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0x1a1a2e, 0x0a0a0a, 0.8);
+            scene.add(hemiLight);
+            
+            const ambientLight = new THREE.AmbientLight(0x0a0a0a, 0.6); 
+            scene.add(ambientLight);
+            
+            createWorld();
+            createFlashlight();
+            createMonsterModel();
+
+            for(let i=0; i<3; i++) spawnBatteryOutOFSight();
+
+            setupMenu();
+            setupDesktopControls();
+            setupMobileControls();
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        // --- ТЕКСТУРЫ СТЕН И ПОЛА ---
+        function createWallMaterials() {
+            const canvasDiff = document.createElement('canvas');
+            const canvasBump = document.createElement('canvas');
+            canvasDiff.width = canvasBump.width = 512; canvasDiff.height = canvasBump.height = 512;
+            const ctxD = canvasDiff.getContext('2d'); const ctxB = canvasBump.getContext('2d');
+
+            ctxD.fillStyle = '#0a0a0a'; ctxD.fillRect(0, 0, 512, 512);
+            ctxB.fillStyle = '#000000'; ctxB.fillRect(0, 0, 512, 512);
+
+            for (let y = 0; y < 512; y += 64) {
+                let offset = (y / 64) % 2 === 0 ? 0 : 64;
+                for (let x = -64; x < 512; x += 128) {
+                    let shade = 15 + Math.random() * 20;
+                    ctxD.fillStyle = `rgb(${shade}, ${shade*0.8}, ${shade*0.7})`; ctxD.fillRect(x + offset + 4, y + 4, 120, 56);
+                    let bumpShade = 150 + Math.random() * 100;
+                    ctxB.fillStyle = `rgb(${bumpShade}, ${bumpShade}, ${bumpShade})`; ctxB.fillRect(x + offset + 4, y + 4, 120, 56);
+
+                    for(let i=0; i<60; i++) {
+                        let nx = x + offset + 4 + Math.random()*120; let ny = y + 4 + Math.random()*56;
+                        ctxD.fillStyle = 'rgba(0,0,0,0.6)'; ctxD.fillRect(nx, ny, 3, 3);
+                        ctxB.fillStyle = 'rgba(20,20,20,1)'; ctxB.fillRect(nx, ny, 3, 3);
+                    }
+                }
+            }
+
+            for (let i = 0; i < 15; i++) {
+                if(Math.random() > 0.3) {
+                    let isFresh = Math.random() > 0.5;
+                    ctxD.fillStyle = isFresh ? '#8a0303' : '#3a0000';
+                    let bx = Math.random()*512; let by = Math.random()*512; let radius = 5 + Math.random()*15;
+                    ctxD.beginPath(); ctxD.arc(bx, by, radius, 0, Math.PI*2); ctxD.fill();
+                    ctxB.fillStyle = '#ffffff'; ctxB.beginPath(); ctxB.arc(bx, by, radius, 0, Math.PI*2); ctxB.fill();
+
+                    for(let k=0; k<4; k++) {
+                        let sx = bx + (Math.random()-0.5)*radius*3.0; let sy = by + (Math.random()-0.5)*radius*3.0; let sRad = 1 + Math.random()*3;
+                        ctxD.beginPath(); ctxD.arc(sx, sy, sRad, 0, Math.PI*2); ctxD.fill();
+                        ctxB.beginPath(); ctxB.arc(sx, sy, sRad, 0, Math.PI*2); ctxB.fill();
+                    }
+                    for(let j=0; j<3; j++){
+                        let dripX = bx - radius/2 + Math.random()*radius; let dripW = 2 + Math.random()*3; let dripH = 20 + Math.random()*80;
+                        ctxD.fillRect(dripX, by, dripW, dripH); ctxB.fillRect(dripX, by, dripW, dripH);
+                        ctxD.beginPath(); ctxD.arc(dripX + dripW/2, by + dripH, dripW, 0, Math.PI*2); ctxD.fill();
+                        ctxB.beginPath(); ctxB.arc(dripX + dripW/2, by + dripH, dripW, 0, Math.PI*2); ctxB.fill();
+                    }
+                }
+            }
+            const texD = new THREE.CanvasTexture(canvasDiff); texD.wrapS = texD.wrapT = THREE.RepeatWrapping;
+            const texB = new THREE.CanvasTexture(canvasBump); texB.wrapS = texB.wrapT = THREE.RepeatWrapping;
+            return new THREE.MeshStandardMaterial({ map: texD, bumpMap: texB, bumpScale: 0.3, roughness: 0.6, metalness: 0.1 });
+        }
+
+        function createFloorMaterial() {
+            const canvasDiff = document.createElement('canvas'); const canvasBump = document.createElement('canvas');
+            canvasDiff.width = canvasBump.width = 256; canvasDiff.height = canvasBump.height = 256;
+            const ctxD = canvasDiff.getContext('2d'); const ctxB = canvasBump.getContext('2d');
+
+            for (let y = 0; y < 256; y += 64) {
+                for (let x = 0; x < 256; x += 64) {
+                    let isDark = (x/64 + y/64) % 2 === 0;
+                    ctxD.fillStyle = isDark ? '#111' : '#1a1a1a'; ctxD.fillRect(x, y, 64, 64);
+                    ctxB.fillStyle = isDark ? '#aaaaaa' : '#ffffff'; ctxB.fillRect(x+2, y+2, 60, 60);
+                }
+            }
+            const texD = new THREE.CanvasTexture(canvasDiff); texD.wrapS = texD.wrapT = THREE.RepeatWrapping; texD.repeat.set(10, 10);
+            const texB = new THREE.CanvasTexture(canvasBump); texB.wrapS = texB.wrapT = THREE.RepeatWrapping; texB.repeat.set(10, 10);
+            return new THREE.MeshStandardMaterial({ map: texD, bumpMap: texB, bumpScale: 0.05, roughness: 0.8 });
+        }
+
+        // --- СОЗДАНИЕ МИРА И НАСТЕННЫХ ЩИТКОВ ---
+        function createWorld() {
+            const wallMat = createWallMaterials();
+            const floorMat = createFloorMaterial();
+            const ceilMat = new THREE.MeshStandardMaterial({ color: 0x020202, roughness: 1 });
+            
+            const boxGeo = new THREE.BoxGeometry(BLOCK_SIZE, WALL_HEIGHT, BLOCK_SIZE);
+            
+            let wallCount = 0;
+            for (let z = 0; z < map.length; z++) for (let x = 0; x < map[z].length; x++) if (map[z][x] === 1) wallCount++;
+
+            instancedWalls = new THREE.InstancedMesh(boxGeo, wallMat, wallCount);
+            instancedWalls.castShadow = true; instancedWalls.receiveShadow = true;
+            
+            let dummy = new THREE.Object3D();
+            let index = 0;
+            
+            for (let z = 0; z < map.length; z++) {
+                for (let x = 0; x < map[z].length; x++) {
+                    if (map[z][x] === 1) {
+                        dummy.position.set(x * BLOCK_SIZE, WALL_HEIGHT / 2, z * BLOCK_SIZE);
+                        dummy.updateMatrix();
+                        instancedWalls.setMatrixAt(index++, dummy.matrix);
+                    } else if (map[z][x] === 2) {
+                        exitMesh = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: 0x220000 }));
+                        exitMesh.position.set(x * BLOCK_SIZE, WALL_HEIGHT / 2, z * BLOCK_SIZE);
+                        scene.add(exitMesh);
+                        exitLight = new THREE.PointLight(0xffffff, 0, 20);
+                        exitLight.position.set(x * BLOCK_SIZE, WALL_HEIGHT/2, z * BLOCK_SIZE);
+                        scene.add(exitLight);
+                    } else if (map[z][x] === 4) {
+                        // Электрощиток (висит на стене)
+                        let pMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2 });
+                        let pGeo = new THREE.BoxGeometry(1.5, 2.0, 0.4); 
+                        let pMesh = new THREE.Mesh(pGeo, pMat);
+                        
+                        let screenGeo = new THREE.PlaneGeometry(1.0, 0.8);
+                        let screenMat = new THREE.MeshBasicMaterial({ color: 0x550000 }); // Красный (выкл)
+                        let screenMesh = new THREE.Mesh(screenGeo, screenMat);
+                        screenMesh.position.set(0, 0.3, 0.21); // Выступает вперед
+                        pMesh.add(screenMesh);
+
+                        let pWorldX = x * BLOCK_SIZE;
+                        let pWorldZ = z * BLOCK_SIZE;
+                        
+                        // Поиск ближайшей стены, чтобы прикрепить щиток
+                        if (map[z-1] && map[z-1][x] === 1) { pWorldZ -= BLOCK_SIZE/2 - 0.2; } 
+                        else if (map[z+1] && map[z+1][x] === 1) { pWorldZ += BLOCK_SIZE/2 - 0.2; pMesh.rotation.y = Math.PI; } 
+                        else if (map[z] && map[z][x-1] === 1) { pWorldX -= BLOCK_SIZE/2 - 0.2; pMesh.rotation.y = -Math.PI/2; } 
+                        else if (map[z] && map[z][x+1] === 1) { pWorldX += BLOCK_SIZE/2 - 0.2; pMesh.rotation.y = Math.PI/2; }
+                        
+                        pMesh.position.set(pWorldX, 2.5, pWorldZ);
+                        pMesh.castShadow = true;
+                        scene.add(pMesh);
+
+                        // Свет от щитка
+                        let pLight = new THREE.PointLight(0x00ff00, 0, 15);
+                        pLight.position.set(0, 0, 1.0); // Относительно щитка
+                        pMesh.add(pLight);
+
+                        panels.push({
+                            mesh: pMesh,
+                            screen: screenMesh,
+                            light: pLight,
+                            gridX: x,
+                            gridZ: z,
+                            worldX: pWorldX,
+                            worldZ: pWorldZ,
+                            active: false,
+                            activeTime: 0 // Таймер раздражения
+                        });
+                    }
+                }
+            }
+            scene.add(instancedWalls);
+
+            const floorGeo = new THREE.PlaneGeometry(map[0].length * BLOCK_SIZE, map.length * BLOCK_SIZE);
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set((map[0].length * BLOCK_SIZE)/2 - BLOCK_SIZE/2, 0, (map.length * BLOCK_SIZE)/2 - BLOCK_SIZE/2);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const ceil = new THREE.Mesh(floorGeo, ceilMat);
+            ceil.rotation.x = Math.PI / 2;
+            ceil.position.set((map[0].length * BLOCK_SIZE)/2 - BLOCK_SIZE/2, WALL_HEIGHT, (map.length * BLOCK_SIZE)/2 - BLOCK_SIZE/2);
+            scene.add(ceil);
+        }
+
+        // --- БАТАРЕЙКИ ---
+        function spawnBatteryOutOFSight() {
+            let validSpots = [];
+            let pGX = Math.round(camera.position.x / BLOCK_SIZE);
+            let pGZ = Math.round(camera.position.z / BLOCK_SIZE);
+            
+            for (let z = 0; z < map.length; z++) {
+                for (let x = 0; x < map[0].length; x++) {
+                    if (map[z][x] === 0 || map[z][x] === 4) { // Спавн возможен и там где щиток (пол свободен)
+                        let dist = Math.hypot(x - pGX, z - pGZ);
+                        let hasBat = worldBatteries.some(b => b.gridX === x && b.gridZ === z);
+                        if (dist > 3 && dist < 12 && !hasBat) validSpots.push({x: x, z: z});
+                    }
+                }
+            }
+
+            if (validSpots.length > 0) {
+                let spot = validSpots[Math.floor(Math.random() * validSpots.length)];
+                const batGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.4, 8);
+                const batMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x005500 });
+                let mesh = new THREE.Mesh(batGeo, batMat);
+                mesh.position.set(spot.x * BLOCK_SIZE, 0.2, spot.z * BLOCK_SIZE);
+                mesh.rotation.x = Math.PI / 2;
+                
+                let light = new THREE.PointLight(0x00ff00, 0.8, 3);
+                mesh.add(light);
+                
+                scene.add(mesh);
+                worldBatteries.push({ mesh: mesh, gridX: spot.x, gridZ: spot.z });
+            }
+        }
+
+        function updateBatterySpawner(delta) {
+            batterySpawnTimer += delta;
+            if (batterySpawnTimer > 15.0) { 
+                batterySpawnTimer = 0;
+                if (worldBatteries.length < 8) spawnBatteryOutOFSight();
+            }
+        }
+
+        function checkBatteryPickup() {
+            for (let i = 0; i < worldBatteries.length; i++) {
+                let bat = worldBatteries[i];
+                let dist = Math.hypot(camera.position.x - bat.mesh.position.x, camera.position.z - bat.mesh.position.z);
+                if (dist < 1.5) {
+                    scene.remove(bat.mesh);
+                    worldBatteries.splice(i, 1);
+                    inventoryBatteries++;
+                    document.getElementById('inventory-bat').innerText = inventoryBatteries;
+                    document.getElementById('btn-reload').style.opacity = 1.0; 
+                    speak("Батарейка!", 1.5, 1.5);
+                    i--; 
+                }
+            }
+            if(inventoryBatteries === 0) document.getElementById('btn-reload').style.opacity = 0.5;
+        }
+
+        // --- ВЗАИМОДЕЙСТВИЕ (ЩИТКИ) ---
+        function checkInteractables() {
+            targetPanel = null;
+            let closestDist = Infinity;
+
+            for(let p of panels) {
+                // Проверка расстояния до мировых координат самой модели щитка
+                let dist = Math.hypot(camera.position.x - p.worldX, camera.position.z - p.worldZ);
+                if(dist < 3.5 && dist < closestDist) {
+                    closestDist = dist;
+                    targetPanel = p;
+                }
+            }
+
+            const crosshair = document.getElementById('crosshair');
+            if (targetPanel) {
+                crosshair.classList.add('crosshair-active');
+                btnInteractUI.style.opacity = 1.0;
+                if(targetPanel.active) {
+                    actionText.innerText = "Щиток работает стабильно";
+                } else {
+                    actionText.innerText = `Нажмите E [Нужно 2 батарейки]`;
+                }
+                actionText.style.opacity = 1;
+            } else {
+                crosshair.classList.remove('crosshair-active');
+                btnInteractUI.style.opacity = 0.5;
+                actionText.style.opacity = 0;
+            }
+        }
+
+        function tryInteract() {
+            if (!isGameActive || !targetPanel || targetPanel.active) return;
+
+            if (inventoryBatteries >= 2) {
+                inventoryBatteries -= 2;
+                document.getElementById('inventory-bat').innerText = inventoryBatteries;
+                
+                targetPanel.active = true;
+                targetPanel.activeTime = 0; // Сброс таймера раздражения
+                targetPanel.screen.material.color.setHex(0x00ff00); // Зеленый экран
+                targetPanel.light.intensity = 5; // Включаем свет
+                
+                speak("Щиток запущен!", 1.2, 1.0);
+                updateObjective();
+            } else {
+                centerMsg.innerText = "НЕДОСТАТОЧНО БАТАРЕЕК!";
+                centerMsg.style.color = "#ffaa00"; centerMsg.style.textShadow = "none";
+                centerMsg.style.opacity = 1;
+                setTimeout(()=>centerMsg.style.opacity=0, 1500);
+            }
+        }
+
+        function updateObjective() {
+            let activeCount = panels.filter(p => p.active).length;
+            document.getElementById('active-panels-count').innerText = activeCount;
+            
+            // ТЕПЕРЬ НУЖНО ТОЛЬКО 3 ЩИТКА ДЛЯ ВЫХОДА
+            if (activeCount >= 3) {
+                if(!exitOpened) openExit();
+            } else {
+                if(exitOpened) closeExit();
+            }
+        }
+
+        // --- ФОНАРИК ---
+        function createFlashlight() {
+            playerGlowLight = new THREE.PointLight(0xffffff, 0.4, 8);
+            camera.add(playerGlowLight); 
+
+            flashlightGroup = new THREE.Group();
+            const geo = new THREE.CylinderGeometry(0.08, 0.08, 0.4, 16);
+            geo.rotateX(Math.PI / 2); 
+            const mat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const mesh = new THREE.Mesh(geo, mat);
+            flashlightGroup.add(mesh);
+
+            spotLight = new THREE.SpotLight(0xffeedd, 0, 40, Math.PI / 3.5, 0.6, 1);
+            spotLight.position.set(0, 0, 0); spotLight.target.position.set(0, 0, -1);
+            spotLight.castShadow = true; spotLight.shadow.mapSize.width = 512; spotLight.shadow.mapSize.height = 512; spotLight.shadow.bias = -0.001;
+            
+            flashlightGroup.add(spotLight); flashlightGroup.add(spotLight.target);
+            camera.add(flashlightGroup); scene.add(camera);
+        }
+
+        function toggleFlashlight() {
+            if (!isGameActive || isReloading) return;
+            isFlashlightOn = !isFlashlightOn;
+            spotLight.intensity = (isFlashlightOn && battery > 0) ? 6.0 : 0;
+        }
+
+        function reloadFlashlight() {
+            if (!isGameActive || isReloading || inventoryBatteries <= 0 || battery >= 7.0) return;
+            
+            isReloading = true;
+            inventoryBatteries--;
+            document.getElementById('inventory-bat').innerText = inventoryBatteries;
+            speak("Зарядка фонаря...", 1.2, 1.0);
+
+            let reloadTimer = 0;
+            const animateReload = () => {
+                if (!isReloading) return;
+                reloadTimer += 0.05;
+                if (reloadTimer < 1) {
+                    flashlightGroup.rotation.x = -Math.PI / 3 * Math.sin(reloadTimer * Math.PI); 
+                    requestAnimationFrame(animateReload);
+                } else {
+                    flashlightGroup.rotation.x = 0;
+                    battery = 7.0;
+                    isReloading = false;
+                    if (isFlashlightOn) spotLight.intensity = 6.0;
+                }
+            };
+            animateReload();
+        }
+
+        // --- МОНСТР ---
+        function createTrollfaceTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#e0e0e0'; ctx.fillRect(0, 0, 512, 512);
+            let grd = ctx.createRadialGradient(256, 256, 100, 256, 256, 256);
+            grd.addColorStop(0, "rgba(0,0,0,0)"); grd.addColorStop(1, "rgba(0,0,0,0.8)");
+            ctx.fillStyle = grd; ctx.fillRect(0,0,512,512);
+            ctx.strokeStyle = '#000'; ctx.lineWidth = 8;
+            ctx.beginPath(); ctx.ellipse(170, 200, 40, 20, 0, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(340, 200, 40, 20, 0, 0, Math.PI*2); ctx.stroke();
+            ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(170, 200, 5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(340, 200, 5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(100, 300); ctx.quadraticCurveTo(256, 450, 412, 300); ctx.quadraticCurveTo(256, 380, 100, 300); ctx.stroke();
+            for(let i=120; i<400; i+=30) { ctx.beginPath(); ctx.moveTo(i, 300 + (i-256)*(i-256)*0.001); ctx.lineTo(i, 350 + (i-256)*(i-256)*0.001); ctx.stroke(); }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createMonsterModel() {
+            monster.group = new THREE.Group();
+            const headGeo = new THREE.SphereGeometry(0.8, 32, 32); headGeo.rotateY(-Math.PI / 2);
+            const headMat = new THREE.MeshStandardMaterial({ map: createTrollfaceTexture(), roughness: 0.8 });
+            monster.head = new THREE.Mesh(headGeo, headMat); monster.head.position.y = 2.0; monster.head.castShadow = true;
+            monster.group.add(monster.head);
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.05, 1.5, 8); const legMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            monster.legL = new THREE.Mesh(legGeo, legMat); monster.legL.position.set(0, 0.75, 0.3); monster.legL.castShadow = true; monster.group.add(monster.legL);
+            monster.legR = new THREE.Mesh(legGeo, legMat); monster.legR.position.set(0, 0.75, -0.3); monster.legR.castShadow = true; monster.group.add(monster.legR);
+            monster.group.position.set(0, 0, 0);
+        }
+
+        function spawnMonster() {
+            if (monster.active) return;
+            monster.active = true;
+            monster.gridX = 13; monster.gridZ = 1;
+            monster.group.position.set(monster.gridX * BLOCK_SIZE, 0, monster.gridZ * BLOCK_SIZE);
+            scene.add(monster.group);
+            
+            centerMsg.innerText = "ОНО ЗДЕСЬ...";
+            centerMsg.style.color = "#ff0000"; centerMsg.style.opacity = 1;
+            setTimeout(() => centerMsg.style.opacity = 0, 4000);
+            speak("Я чую тебя...", 0.6, 0.5);
+        }
+
+        function getPathTo(sx, sz, tx, tz) {
+            let queue = [{x: sx, z: sz, path: []}];
+            let visited = new Set(); visited.add(`${sx},${sz}`);
+            let dirs = [[0,1],[1,0],[0,-1],[-1,0]];
+            while(queue.length > 0) {
+                let curr = queue.shift();
+                if (curr.x === tx && curr.z === tz) return curr.path;
+                for(let d of dirs) {
+                    let nx = curr.x + d[0]; let nz = curr.z + d[1];
+                    // 4 - это щиток, сквозь него можно ходить
+                    if (nz >= 0 && nz < map.length && nx >= 0 && nx < map[0].length) {
+                        if (map[nz][nx] !== 1 && map[nz][nx] !== 2 && !visited.has(`${nx},${nz}`)) {
+                            visited.add(`${nx},${nz}`);
+                            queue.push({x: nx, z: nz, path: [...curr.path, {x: nx, z: nz}]});
+                        }
+                    }
+                }
+            }
+            return [];
+        }
+
+        function checkLineOfSight(x0, y0, x1, y1) {
+            let dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+            let sx = (x0 < x1) ? 1 : -1, sy = (y0 < y1) ? 1 : -1;
+            let err = dx - dy;
+            while(true) {
+                if (map[y0][x0] === 1 || map[y0][x0] === 2) return false; 
+                if ((x0 === x1) && (y0 === y1)) break;
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; x0 += sx; }
+                if (e2 < dx) { err += dx; y0 += sy; }
+            }
+            return true;
+        }
+
+        function updateMonster(delta) {
+            if (!monster.active) return;
+
+            let mPosX = monster.group.position.x; let mPosZ = monster.group.position.z;
+            let pPosX = camera.position.x; let pPosZ = camera.position.z;
+            let mGridX = Math.round(mPosX / BLOCK_SIZE); let mGridZ = Math.round(mPosZ / BLOCK_SIZE);
+            let pGridX = Math.round(pPosX / BLOCK_SIZE); let pGridZ = Math.round(pPosZ / BLOCK_SIZE);
+            let distToPlayer = Math.hypot(mPosX - pPosX, mPosZ - pPosZ);
+
+            let hasLoS = checkLineOfSight(mGridX, mGridZ, pGridX, pGridZ);
+
+            if (monster.state === 'breaking_panel') {
+                monster.pauseTimer -= delta;
+                monster.head.rotation.z = Math.sin(performance.now() * 0.02) * 0.2; // Бьется головой об щиток
+                
+                if (monster.pauseTimer <= 0) {
+                    monster.head.rotation.z = 0; 
+                    if (monster.targetPanel) {
+                        monster.targetPanel.active = false;
+                        monster.targetPanel.activeTime = 0; // Сброс раздражения
+                        monster.targetPanel.light.intensity = 0;
+                        monster.targetPanel.screen.material.color.setHex(0x550000); // Снова красный
+                        speak("Тьма лучше...", 0.7, 0.4);
+                        updateObjective();
+                    }
+                    monster.state = 'roaming';
+                }
+                return; // Игнорирует игрока пока ломает
+            }
+
+            if (monster.state === 'roaming') {
+                monster.currentSpeed = monster.baseSpeed * 0.8; 
+                
+                if (hasLoS) {
+                    monster.state = 'hunting_player'; 
+                    speak("ГРРРААА!", 1.5, 0.2);
+                } else {
+                    // ЛОГИКА РАЗДРАЖЕНИЯ: Ищет щитки, которые работают > 20 секунд
+                    let annoyingPanels = panels.filter(p => p.active && p.activeTime > 20.0);
+                    
+                    if (annoyingPanels.length > 0 && Math.random() < 0.02) { // Небольшой шанс, чтобы не шел мгновенно
+                        monster.targetPanel = annoyingPanels[Math.floor(Math.random() * annoyingPanels.length)];
+                        monster.path = getPathTo(mGridX, mGridZ, monster.targetPanel.gridX, monster.targetPanel.gridZ);
+                        monster.state = 'hunting_panel';
+                    } else if (monster.path.length === 0) {
+                        let rx, rz;
+                        do {
+                            rx = Math.floor(Math.random() * map[0].length);
+                            rz = Math.floor(Math.random() * map.length);
+                        } while (map[rz][rx] !== 0);
+                        monster.path = getPathTo(mGridX, mGridZ, rx, rz);
+                    }
+                }
+            } 
+            else if (monster.state === 'hunting_panel') {
+                monster.currentSpeed = monster.baseSpeed;
+                
+                if (hasLoS && distToPlayer < 15) { // Если игрок подошел близко - отвлекается
+                    monster.state = 'hunting_player';
+                    speak("А, ЭТО ТЫ!", 1.5, 0.2);
+                } else if (monster.targetPanel && !monster.targetPanel.active) {
+                    monster.state = 'roaming'; // Щиток уже выключили
+                } else {
+                    let distToPanelGrid = Math.hypot(mGridX - monster.targetPanel.gridX, mGridZ - monster.targetPanel.gridZ);
+                    if (distToPanelGrid === 0) { // Монстр дошел до клетки со щитком
+                        monster.state = 'breaking_panel';
+                        monster.pauseTimer = 3.0; // 3 секунды ломает
+                        speak("Выключить свет!", 0.6, 0.2);
+                        monster.path = [];
+                        monster.group.lookAt(monster.targetPanel.worldX, 0, monster.targetPanel.worldZ); // Смотрит на стену со щитком
+                    }
+                }
+            }
+            else if (monster.state === 'hunting_player') {
+                monster.currentSpeed = monster.baseSpeed * 1.5; 
+                if (Math.random() < 0.1) monster.path = getPathTo(mGridX, mGridZ, pGridX, pGridZ); 
+                if (!hasLoS && distToPlayer > 20) {
+                    monster.state = 'roaming';
+                }
+            }
+
+            if (monster.state !== 'breaking_panel' && monster.path.length > 0) {
+                let targetNode = monster.path[0];
+                let tX = targetNode.x * BLOCK_SIZE; let tZ = targetNode.z * BLOCK_SIZE;
+                let dx = tX - mPosX; let dz = tZ - mPosZ;
+                let dist = Math.hypot(dx, dz);
+
+                if (dist > 0.2) {
+                    monster.group.position.x += (dx / dist) * monster.currentSpeed * delta;
+                    monster.group.position.z += (dz / dist) * monster.currentSpeed * delta;
+                    monster.group.lookAt(tX, 0, tZ);
+                    
+                    monster.legTime += monster.currentSpeed * delta * 2;
+                    monster.legL.rotation.x = Math.sin(monster.legTime) * 0.5;
+                    monster.legR.rotation.x = Math.sin(monster.legTime + Math.PI) * 0.5;
+                } else {
+                    monster.path.shift(); 
+                }
+            } else if (monster.state !== 'breaking_panel') {
+                monster.legL.rotation.x = 0; monster.legR.rotation.x = 0;
+            }
+
+            if (distToPlayer < 1.5) gameOverDeath();
+        }
+
+        // --- ВЗАИМОДЕЙСТВИЯ (Речь, Побег, Смерть) ---
+        function speak(text, rate=1.1, pitch=1.2) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'ru-RU'; u.rate = rate; u.pitch = pitch;
+                window.speechSynthesis.speak(u);
+            }
+            subtitles.innerText = text; subtitles.style.opacity = 1;
+            setTimeout(() => subtitles.style.opacity = 0, 3000);
+        }
+
+        function openExit() {
+            exitOpened = true;
+            centerMsg.innerText = "ВЫХОД ОТКРЫТ! БЕГИТЕ НА СВЕТ!";
+            centerMsg.style.color = "#ffffaa"; centerMsg.style.opacity = 1;
+            speak("Выход открыт! Скорее туда!", 1.1, 1.2);
+            setTimeout(() => centerMsg.style.opacity = 0, 4000);
+
+            map[1][13] = 0; 
+            scene.remove(exitMesh); 
+            exitLight.intensity = 15; exitLight.color.setHex(0xffffff);
+        }
+
+        function closeExit() {
+            exitOpened = false;
+            centerMsg.innerText = "ВЫХОД ЗАКРЫТ! МОНСТР СЛОМАЛ ЩИТОК!";
+            centerMsg.style.color = "#ff0000"; centerMsg.style.opacity = 1;
+            speak("Он сломал щиток!", 1.5, 0.8);
+            setTimeout(() => centerMsg.style.opacity = 0, 4000);
+
+            map[1][13] = 2; 
+            scene.add(exitMesh); 
+            exitLight.intensity = 0;
+        }
+
+        function triggerWin() {
+            isGameActive = false; document.exitPointerLock && document.exitPointerLock();
+            uiLayer.style.display = 'none'; document.getElementById('mobile-controls').style.display = 'none';
+            document.getElementById('end-screen').style.display = 'flex';
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        }
+
+        function gameOverDeath() {
+            isGameActive = false; document.exitPointerLock && document.exitPointerLock();
+            uiLayer.style.display = 'none'; document.getElementById('mobile-controls').style.display = 'none';
+            centerMsg.innerText = "ВАС ПОЙМАЛИ!";
+            centerMsg.style.color = "#ff0000"; centerMsg.style.opacity = 1;
+            
+            camera.position.y = 1.0;
+            camera.lookAt(monster.group.position);
+            
+            setTimeout(() => location.reload(), 3000);
+        }
+
+        // --- УПРАВЛЕНИЕ И МЕНЮ ---
+        function setupMenu() {
+            document.getElementById('btn-start').addEventListener('click', () => {
+                if ('speechSynthesis' in window) window.speechSynthesis.speak(new SpeechSynthesisUtterance('')); 
+                document.getElementById('main-menu').style.display = 'none'; uiLayer.style.display = 'block';
+                if (isTouchDevice()) {
+                    if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+                    isGameActive = true; prevTime = performance.now();
+                } else {
+                    document.body.requestPointerLock();
+                }
+            });
+            
+            document.getElementById('btn-controls').addEventListener('click', () => {
+                const cs = document.getElementById('controls-screen');
+                cs.style.display = cs.style.display === 'block' ? 'none' : 'block';
+            });
+
+            // PYTHON MODAL
+            document.getElementById('btn-open-python').addEventListener('click', () => {
+                document.getElementById('python-modal').style.display = 'block';
+            });
+            document.getElementById('btn-close-python').addEventListener('click', () => {
+                document.getElementById('python-modal').style.display = 'none';
+            });
+            document.getElementById('btn-apply-python').addEventListener('click', () => {
+                let code = document.getElementById('python-code').value;
+                let script = document.createElement('script');
+                script.type = 'text/python';
+                script.text = code;
+                document.body.appendChild(script);
+                brython(); 
+                document.getElementById('python-modal').style.display = 'none';
+            });
+        }
+
+        function isTouchDevice() { return (('ontouchstart' in window) || (navigator.maxTouchPoints > 0)); }
+
+        const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+        function setupDesktopControls() {
+            document.addEventListener('pointerlockchange', () => {
+                if (document.pointerLockElement === document.body) {
+                    isGameActive = true; prevTime = performance.now();
+                } else {
+                    if(document.getElementById('end-screen').style.display !== 'flex') {
+                        isGameActive = false; document.getElementById('main-menu').style.display = 'flex'; uiLayer.style.display = 'none';
+                    }
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isGameActive || isTouchDevice()) return;
+                euler.setFromQuaternion(camera.quaternion);
+                euler.y -= e.movementX * 0.002; euler.x -= e.movementY * 0.002;
+                euler.x = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, euler.x));
+                camera.quaternion.setFromEuler(euler);
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if(!isGameActive) return;
+                if (e.code === 'KeyW') keys.w = true;
+                if (e.code === 'KeyS') keys.s = true;
+                if (e.code === 'KeyA') keys.a = true;
+                if (e.code === 'KeyD') keys.d = true;
+                if (e.code === 'ShiftLeft') keys.shift = true;
+                if (e.code === 'KeyE') tryInteract();
+                if (e.code === 'KeyF') toggleFlashlight();
+                if (e.code === 'KeyR') reloadFlashlight();
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'KeyW') keys.w = false;
+                if (e.code === 'KeyS') keys.s = false;
+                if (e.code === 'KeyA') keys.a = false;
+                if (e.code === 'KeyD') keys.d = false;
+                if (e.code === 'ShiftLeft') keys.shift = false;
+            });
+        }
+
+        function setupMobileControls() {
+            const joyBase = document.getElementById('joystick-base');
+            const joyStick = document.getElementById('joystick-stick');
+            const lookArea = document.getElementById('look-area');
+            let joyId = null, lookId = null, lastLook = {x:0, y:0}, joyCenter = {x:0, y:0};
+
+            joyBase.addEventListener('touchstart', e => {
+                e.preventDefault(); if (joyId !== null) return;
+                const touch = e.changedTouches[0]; joyId = touch.identifier;
+                const rect = joyBase.getBoundingClientRect();
+                joyCenter = { x: rect.left + rect.width/2, y: rect.top + rect.height/2 };
+            }, {passive: false});
+
+            joyBase.addEventListener('touchmove', e => {
+                e.preventDefault();
+                for(let t of e.changedTouches) {
+                    if(t.identifier === joyId) {
+                        let dx = t.clientX - joyCenter.x, dy = t.clientY - joyCenter.y;
+                        let max = 40, dist = Math.hypot(dx, dy);
+                        if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
+                        joyStick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                        joyVector.x = dx / max; joyVector.y = dy / max;
+                    }
+                }
+            }, {passive: false});
+
+            joyBase.addEventListener('touchend', e => {
+                e.preventDefault(); for(let t of e.changedTouches) if(t.identifier === joyId) { joyId = null; joyVector = {x:0,y:0}; joyStick.style.transform = `translate(-50%, -50%)`; }
+            }, {passive: false});
+
+            lookArea.addEventListener('touchstart', e => {
+                e.preventDefault(); if(lookId !== null) return;
+                const t = e.changedTouches[0]; lookId = t.identifier; lastLook = {x: t.clientX, y: t.clientY};
+            }, {passive: false});
+
+            lookArea.addEventListener('touchmove', e => {
+                e.preventDefault();
+                for(let t of e.changedTouches) {
+                    if(t.identifier === lookId) {
+                        euler.setFromQuaternion(camera.quaternion);
+                        euler.y -= (t.clientX - lastLook.x)*0.005; euler.x -= (t.clientY - lastLook.y)*0.005;
+                        euler.x = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, euler.x));
+                        camera.quaternion.setFromEuler(euler);
+                        lastLook = {x: t.clientX, y: t.clientY};
+                    }
+                }
+            }, {passive: false});
+
+            lookArea.addEventListener('touchend', e => {
+                e.preventDefault(); for(let t of e.changedTouches) if(t.identifier === lookId) lookId = null;
+            }, {passive: false});
+
+            const btnRun = document.getElementById('btn-run'), btnInteract = document.getElementById('btn-interact'), btnFlash = document.getElementById('btn-flash'), btnReload = document.getElementById('btn-reload');
+            btnRun.addEventListener('touchstart', e => { e.preventDefault(); keys.shift = true; btnRun.style.background="rgba(255,255,255,0.3)"; });
+            btnRun.addEventListener('touchend', e => { e.preventDefault(); keys.shift = false; btnRun.style.background=""; });
+            btnInteract.addEventListener('touchstart', e => { e.preventDefault(); tryInteract(); });
+            btnFlash.addEventListener('touchstart', e => { e.preventDefault(); toggleFlashlight(); });
+            btnReload.addEventListener('touchstart', e => { e.preventDefault(); reloadFlashlight(); });
+        }
+
+        function isWall(posX, posZ) {
+            let mx = Math.round(posX / BLOCK_SIZE), mz = Math.round(posZ / BLOCK_SIZE);
+            if (mz >= 0 && mz < map.length && mx >= 0 && mx < map[0].length) {
+                // 4 (Щиток) теперь проницаем для ходьбы (висит на стене сбоку)
+                return map[mz][mx] === 1 || map[mz][mx] === 2; 
+            }
+            return true;
+        }
+
+        // --- ИГРОВОЙ ЦИКЛ ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const delta = Math.min((time - prevTime) / 1000, 0.1); 
+            prevTime = time;
+
+            if (isGameActive) {
+                gameTime += delta;
+                if (gameTime >= MONSTER_SPAWN_TIME && !monster.active) spawnMonster();
+
+                updateBatterySpawner(delta);
+                
+                // Увеличиваем таймер "раздражения" для запущенных щитков
+                for(let p of panels) {
+                    if(p.active) p.activeTime += delta;
+                }
+
+                let runMod = keys.shift ? 2.0 : 1.0;
+                let speed = 10.0 * baseSpeedMultiplier * runMod * delta;
+
+                const camDir = new THREE.Vector3(); camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize();
+                const camRight = new THREE.Vector3().crossVectors(camDir, new THREE.Vector3(0,1,0)).normalize();
+                let mX = 0, mZ = 0;
+
+                if(keys.w) { mX += camDir.x*speed; mZ += camDir.z*speed; }
+                if(keys.s) { mX -= camDir.x*speed; mZ -= camDir.z*speed; }
+                if(keys.a) { mX -= camRight.x*speed; mZ -= camRight.z*speed; }
+                if(keys.d) { mX += camRight.x*speed; mZ += camRight.z*speed; }
+                if (joyVector.y < 0) { mX += camDir.x * speed * Math.abs(joyVector.y); mZ += camDir.z * speed * Math.abs(joyVector.y); }
+                if (joyVector.y > 0) { mX -= camDir.x * speed * Math.abs(joyVector.y); mZ -= camDir.z * speed * Math.abs(joyVector.y); }
+                if (joyVector.x < 0) { mX -= camRight.x * speed * Math.abs(joyVector.x); mZ -= camRight.z * speed * Math.abs(joyVector.x); }
+                if (joyVector.x > 0) { mX += camRight.x * speed * Math.abs(joyVector.x); mZ += camRight.z * speed * Math.abs(joyVector.x); }
+
+                // --- ФИЗИКА СКОЛЬЖЕНИЯ ---
+                const pRadius = 1.0; 
+                if (mX !== 0) {
+                    let nextX = camera.position.x + mX; let leadX = nextX + Math.sign(mX) * pRadius;
+                    if (!isWall(leadX, camera.position.z + pRadius*0.5) && !isWall(leadX, camera.position.z - pRadius*0.5)) camera.position.x = nextX;
+                }
+                if (mZ !== 0) {
+                    let nextZ = camera.position.z + mZ; let leadZ = nextZ + Math.sign(mZ) * pRadius;
+                    if (!isWall(camera.position.x + pRadius*0.5, leadZ) && !isWall(camera.position.x - pRadius*0.5, leadZ)) camera.position.z = nextZ;
+                }
+
+                // Предохранитель 
+                if (isWall(camera.position.x, camera.position.z)) {
+                    let cX = Math.round(camera.position.x / BLOCK_SIZE);
+                    let cZ = Math.round(camera.position.z / BLOCK_SIZE);
+                    let found = false;
+                    for (let r = 1; r <= 2 && !found; r++) {
+                        let dirs = [[0,r],[r,0],[0,-r],[-r,0],[r,r],[-r,r],[r,-r],[-r,-r]];
+                        for(let d of dirs) {
+                            let nX = cX + d[0], nZ = cZ + d[1];
+                            if (nZ >= 0 && nZ < map.length && nX >= 0 && nX < map[0].length && (map[nZ][nX] === 0 || map[nZ][nX] === 4)) {
+                                camera.position.x = nX * BLOCK_SIZE; camera.position.z = nZ * BLOCK_SIZE; found = true; break;
+                            }
+                        }
+                    }
+                }
+
+                let isMoving = keys.w || keys.s || keys.a || keys.d || joyVector.x!==0 || joyVector.y!==0;
+                if (isMoving) {
+                    camera.position.y = (WALL_HEIGHT / 2) + Math.sin(time * (keys.shift ? 0.015 : 0.01)) * 0.15;
+                    if(!isReloading) flashlightGroup.position.y = Math.sin(time * 0.012) * 0.02;
+                } else {
+                    camera.position.y = WALL_HEIGHT / 2;
+                    if(!isReloading) flashlightGroup.position.y = 0;
+                }
+                
+                flashlightGroup.position.x = 0.4; flashlightGroup.position.z = -0.5;
+
+                if (isFlashlightOn && battery > 0) {
+                    battery -= delta;
+                    if (battery <= 0) { battery = 0; isFlashlightOn = false; spotLight.intensity = 0; }
+                }
+                document.getElementById('battery-bar').style.width = (battery / 7.0 * 100) + '%';
+                
+                checkInteractables();
+                checkBatteryPickup();
+                updateMonster(delta);
+                
+                if (exitOpened) {
+                    let pGX = Math.round(camera.position.x / BLOCK_SIZE);
+                    let pGZ = Math.round(camera.position.z / BLOCK_SIZE);
+                    if (pGX === 13 && pGZ === 1) triggerWin();
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
+
+```
+;
